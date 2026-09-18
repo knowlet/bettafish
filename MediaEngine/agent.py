@@ -38,8 +38,15 @@ class DeepSearchAgent:
         # 初始化LLM客户端
         self.llm_client = self._initialize_llm()
         
-        # 初始化搜索工具集
-        self.search_agency = BochaMultimodalSearch(api_key=(self.config.BOCHA_API_KEY or self.config.BOCHA_WEB_SEARCH_API_KEY))
+        # 初始化搜索工具集。配置默认就是 AnspireAPI，因此不要再硬编码 Bocha。
+        if self.config.SEARCH_TOOL_TYPE == "AnspireAPI":
+            self.search_agency = AnspireAISearch(api_key=self.config.ANSPIRE_API_KEY)
+            self.search_provider = "AnspireAPI"
+        else:
+            self.search_agency = BochaMultimodalSearch(
+                api_key=(self.config.BOCHA_API_KEY or self.config.BOCHA_WEB_SEARCH_API_KEY)
+            )
+            self.search_provider = "BochaAPI"
         
         # 初始化节点
         self._initialize_nodes()
@@ -52,7 +59,7 @@ class DeepSearchAgent:
         
         logger.info(f"Media Agent已初始化")
         logger.info(f"使用LLM: {self.llm_client.get_model_info()}")
-        logger.info(f"搜索工具集: BochaMultimodalSearch (支持5种多模态搜索工具)")
+        logger.info(f"搜索工具集: {self.search_provider}")
     
     def _initialize_llm(self) -> LLMClient:
         """初始化LLM客户端"""
@@ -118,10 +125,16 @@ class DeepSearchAgent:
             max_results = kwargs.get("max_results", 10)
             return self.search_agency.comprehensive_search(query, max_results)
         elif tool_name == "web_search_only":
-            max_results = kwargs.get("max_results", 15)
-            return self.search_agency.web_search_only(query, max_results)
+            if hasattr(self.search_agency, "web_search_only"):
+                max_results = kwargs.get("max_results", 15)
+                return self.search_agency.web_search_only(query, max_results)
+            logger.info("  ⚠️  当前搜索 provider 不支持 web_search_only，回退综合搜索")
+            return self.search_agency.comprehensive_search(query, kwargs.get("max_results", 10))
         elif tool_name == "search_for_structured_data":
-            return self.search_agency.search_for_structured_data(query)
+            if hasattr(self.search_agency, "search_for_structured_data"):
+                return self.search_agency.search_for_structured_data(query)
+            logger.info("  ⚠️  当前搜索 provider 不支持 structured data，回退综合搜索")
+            return self.search_agency.comprehensive_search(query)
         elif tool_name == "search_last_24_hours":
             return self.search_agency.search_last_24_hours(query)
         elif tool_name == "search_last_week":
