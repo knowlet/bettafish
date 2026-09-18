@@ -21,6 +21,7 @@ from .nodes import (
 from .state import State
 from .tools import BochaMultimodalSearch, BochaResponse, AnspireAISearch, AnspireResponse
 from .utils import settings, Settings, format_search_results_for_prompt
+from SystemOne.decisions import should_continue_research, triage_evidence
 
 
 class DeepSearchAgent:
@@ -283,6 +284,14 @@ class DeepSearchAgent:
             paragraph_title=paragraph.title,
         )
         
+        summary_results = triage_evidence(
+            query=self.state.query or paragraph.title,
+            section={"title": paragraph.title, "content": paragraph.content},
+            results=search_results,
+            decision_id="media.evidence.initial",
+        )
+        logger.info(f"  - Jev证据筛选: {len(search_results)} -> {len(summary_results)}")
+
         # 生成初始总结
         logger.info("  - 生成初始总结...")
         summary_input = {
@@ -290,7 +299,7 @@ class DeepSearchAgent:
             "content": paragraph.content,
             "search_query": search_query,
             "search_results": format_search_results_for_prompt(
-                search_results, self.config.SEARCH_CONTENT_MAX_LENGTH
+                summary_results, self.config.SEARCH_CONTENT_MAX_LENGTH
             )
         }
         
@@ -307,6 +316,19 @@ class DeepSearchAgent:
         
         for reflection_i in range(self.config.MAX_REFLECTIONS):
             logger.info(f"  - 反思 {reflection_i + 1}/{self.config.MAX_REFLECTIONS}...")
+
+            continue_research = should_continue_research(
+                {
+                    "title": paragraph.title,
+                    "content": paragraph.content,
+                    "paragraph_latest_state": paragraph.research.latest_summary,
+                    "reflection_index": reflection_i,
+                },
+                decision_id="media.reflection.continue",
+            )
+            if continue_research is False:
+                logger.info("    System One: 当前多模态证据覆盖已足够，提前结束反思")
+                break
             
             # 准备反思输入
             reflection_input = {
@@ -366,13 +388,25 @@ class DeepSearchAgent:
                 paragraph_title=paragraph.title,
             )
             
+            reflection_results = triage_evidence(
+                query=self.state.query or paragraph.title,
+                section={
+                    "title": paragraph.title,
+                    "content": paragraph.content,
+                    "paragraph_latest_state": paragraph.research.latest_summary,
+                },
+                results=search_results,
+                decision_id="media.evidence.reflection",
+            )
+            logger.info(f"    Jev证据筛选: {len(search_results)} -> {len(reflection_results)}")
+
             # 生成反思总结
             reflection_summary_input = {
                 "title": paragraph.title,
                 "content": paragraph.content,
                 "search_query": search_query,
                 "search_results": format_search_results_for_prompt(
-                    search_results, self.config.SEARCH_CONTENT_MAX_LENGTH
+                    reflection_results, self.config.SEARCH_CONTENT_MAX_LENGTH
                 ),
                 "paragraph_latest_state": paragraph.research.latest_summary
             }

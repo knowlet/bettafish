@@ -4,9 +4,12 @@
 """
 
 import json
+import os
 from typing import Dict, Any
 from json.decoder import JSONDecodeError
 from loguru import logger
+
+from SystemOne.decisions import choose_media_search_tool
 
 from .base_node import BaseNode
 from ..prompts import SYSTEM_PROMPT_FIRST_SEARCH, SYSTEM_PROMPT_REFLECTION
@@ -70,6 +73,14 @@ class FirstSearchNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+            route = choose_media_search_tool(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="initial",
+                provider=os.getenv("SEARCH_TOOL_TYPE", "AnspireAPI"),
+            )
+            if route:
+                processed_response.update(route)
             
             logger.info(f"生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response
@@ -205,6 +216,14 @@ class ReflectionNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+            route = choose_media_search_tool(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="reflection",
+                provider=os.getenv("SEARCH_TOOL_TYPE", "AnspireAPI"),
+            )
+            if route:
+                processed_response.update(route)
             
             logger.info(f"反思生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response

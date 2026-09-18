@@ -23,7 +23,7 @@ from .tools import TavilyNewsAgency, TavilyResponse
 from .utils import Settings, format_search_results_for_prompt
 from loguru import logger
 
-from SystemOne.decisions import should_continue_research
+from SystemOne.decisions import should_continue_research, triage_evidence
 
 class DeepSearchAgent:
     """Deep Search Agent主类"""
@@ -288,6 +288,16 @@ class DeepSearchAgent:
         # 更新状态中的搜索历史
         paragraph.research.add_search_results(search_query, search_results)
         
+        # Jev evidence triage: batch-score relevance/evidence/novelty and
+        # only send the highest-value results into the expensive summary LLM.
+        summary_results = triage_evidence(
+            query=self.state.query or paragraph.title,
+            section={"title": paragraph.title, "content": paragraph.content},
+            results=search_results,
+            decision_id="query.evidence.initial",
+        )
+        logger.info(f"  - Jev证据筛选: {len(search_results)} -> {len(summary_results)}")
+
         # 生成初始总结
         logger.info("  - 生成初始总结...")
         summary_input = {
@@ -295,7 +305,7 @@ class DeepSearchAgent:
             "content": paragraph.content,
             "search_query": search_query,
             "search_results": format_search_results_for_prompt(
-                search_results, self.config.SEARCH_CONTENT_MAX_LENGTH
+                summary_results, self.config.SEARCH_CONTENT_MAX_LENGTH
             )
         }
         
@@ -392,13 +402,25 @@ class DeepSearchAgent:
             # 更新搜索历史
             paragraph.research.add_search_results(search_query, search_results)
             
+            reflection_results = triage_evidence(
+                query=self.state.query or paragraph.title,
+                section={
+                    "title": paragraph.title,
+                    "content": paragraph.content,
+                    "paragraph_latest_state": paragraph.research.latest_summary,
+                },
+                results=search_results,
+                decision_id="query.evidence.reflection",
+            )
+            logger.info(f"    Jev证据筛选: {len(search_results)} -> {len(reflection_results)}")
+
             # 生成反思总结
             reflection_summary_input = {
                 "title": paragraph.title,
                 "content": paragraph.content,
                 "search_query": search_query,
                 "search_results": format_search_results_for_prompt(
-                    search_results, self.config.SEARCH_CONTENT_MAX_LENGTH
+                    reflection_results, self.config.SEARCH_CONTENT_MAX_LENGTH
                 ),
                 "paragraph_latest_state": paragraph.research.latest_summary
             }

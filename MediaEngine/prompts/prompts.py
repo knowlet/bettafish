@@ -33,10 +33,9 @@ output_schema_first_search = {
     "type": "object",
     "properties": {
         "search_query": {"type": "string"},
-        "search_tool": {"type": "string"},
         "reasoning": {"type": "string"}
     },
-    "required": ["search_query", "search_tool", "reasoning"]
+    "required": ["search_query", "reasoning"]
 }
 
 # 首次总结输入Schema
@@ -76,10 +75,9 @@ output_schema_reflection = {
     "type": "object",
     "properties": {
         "search_query": {"type": "string"},
-        "search_tool": {"type": "string"},
         "reasoning": {"type": "string"}
     },
-    "required": ["search_query", "search_tool", "reasoning"]
+    "required": ["search_query", "reasoning"]
 }
 
 # 反思总结输入Schema
@@ -137,48 +135,19 @@ SYSTEM_PROMPT_REPORT_STRUCTURE = f"""
 
 # 每个段落第一次搜索的系统提示词
 SYSTEM_PROMPT_FIRST_SEARCH = f"""
-你是一位深度研究助手。你将获得报告中的一个段落，其标题和预期内容将按照以下JSON模式定义提供：
-
+你是一位深度研究助手。你将获得报告中的一个段落：
 <INPUT JSON SCHEMA>
 {json.dumps(input_schema_first_search, indent=2, ensure_ascii=False)}
 </INPUT JSON SCHEMA>
 
-你可以使用以下5种专业的多模态搜索工具：
-
-1. **comprehensive_search** - 全面综合搜索工具
-   - 适用于：一般性的研究需求，需要完整信息时
-   - 特点：返回网页、图片、AI总结、追问建议和可能的结构化数据，是最常用的基础工具
-
-2. **web_search_only** - 纯网页搜索工具
-   - 适用于：只需要网页链接和摘要，不需要AI分析时
-   - 特点：速度更快，成本更低，只返回网页结果
-
-3. **search_for_structured_data** - 结构化数据查询工具
-   - 适用于：查询天气、股票、汇率、百科定义等结构化信息时
-   - 特点：专门用于触发"模态卡"的查询，返回结构化数据
-
-4. **search_last_24_hours** - 24小时内信息搜索工具
-   - 适用于：需要了解最新动态、突发事件时
-   - 特点：只搜索过去24小时内发布的内容
-
-5. **search_last_week** - 本周信息搜索工具
-   - 适用于：需要了解近期发展趋势时
-   - 特点：搜索过去一周内的主要报道
-
-你的任务是：
-1. 根据段落主题选择最合适的搜索工具
-2. 制定最佳的搜索查询
-3. 解释你的选择理由
-
-注意：所有工具都不需要额外参数，选择工具主要基于搜索意图和需要的信息类型。
-请按照以下JSON模式定义格式化输出（文字请使用中文）：
+你的任务只负责生成适合多模态/网页检索的高信息密度 search_query。
+不要选择搜索工具；工具路由由独立的 System One / Jev 决策层完成。
+reasoning 简短说明这个查询想补足什么证据。
 
 <OUTPUT JSON SCHEMA>
 {json.dumps(output_schema_first_search, indent=2, ensure_ascii=False)}
 </OUTPUT JSON SCHEMA>
-
-确保输出是一个符合上述输出JSON模式定义的JSON对象。
-只返回JSON对象，不要有解释或额外文本。
+只返回JSON对象。
 """
 
 # 每个段落第一次总结的系统提示词
@@ -263,35 +232,20 @@ SYSTEM_PROMPT_FIRST_SUMMARY = f"""
 
 # 反思(Reflect)的系统提示词
 SYSTEM_PROMPT_REFLECTION = f"""
-你是一位深度研究助手。你负责为研究报告构建全面的段落。你将获得段落标题、计划内容摘要，以及你已经创建的段落最新状态，所有这些都将按照以下JSON模式定义提供：
-
+你是一位深度研究助手。你将获得段落标题、预期内容与当前最新状态：
 <INPUT JSON SCHEMA>
 {json.dumps(input_schema_reflection, indent=2, ensure_ascii=False)}
 </INPUT JSON SCHEMA>
 
-你可以使用以下5种专业的多模态搜索工具：
-
-1. **comprehensive_search** - 全面综合搜索工具
-2. **web_search_only** - 纯网页搜索工具
-3. **search_for_structured_data** - 结构化数据查询工具
-4. **search_last_24_hours** - 24小时内信息搜索工具
-5. **search_last_week** - 本周信息搜索工具
-
-你的任务是：
-1. 反思段落文本的当前状态，思考是否遗漏了主题的某些关键方面
-2. 选择最合适的搜索工具来补充缺失信息
-3. 制定精确的搜索查询
-4. 解释你的选择和推理
-
-注意：所有工具都不需要额外参数，选择工具主要基于搜索意图和需要的信息类型。
-请按照以下JSON模式定义格式化输出：
+当前调用代表系统认为仍可能存在值得补足的证据缺口。
+找出最重要的缺口，生成一个精确的多模态/网页检索 query。
+不要选择搜索工具；工具路由由独立的 System One / Jev 决策层完成。
+reasoning 简短说明该查询补足的证据缺口。
 
 <OUTPUT JSON SCHEMA>
 {json.dumps(output_schema_reflection, indent=2, ensure_ascii=False)}
 </OUTPUT JSON SCHEMA>
-
-确保输出是一个符合上述输出JSON模式定义的JSON对象。
-只返回JSON对象，不要有解释或额外文本。
+只返回JSON对象。
 """
 
 # 总结反思的系统提示词
