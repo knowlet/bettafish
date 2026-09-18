@@ -8,6 +8,8 @@ from typing import Dict, Any
 from json.decoder import JSONDecodeError
 from loguru import logger
 
+from SystemOne.decisions import choose_insight_search_plan
+
 from .base_node import BaseNode
 from ..prompts import SYSTEM_PROMPT_FIRST_SEARCH, SYSTEM_PROMPT_REFLECTION
 from ..utils.text_processing import (
@@ -70,6 +72,13 @@ class FirstSearchNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+            plan = choose_insight_search_plan(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="initial",
+            )
+            if plan:
+                processed_response.update(plan)
             
             logger.info(f"生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response
@@ -205,6 +214,13 @@ class ReflectionNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+            plan = choose_insight_search_plan(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="reflection",
+            )
+            if plan:
+                processed_response.update(plan)
             
             logger.info(f"反思生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response

@@ -32,6 +32,7 @@ from .tools import (
 )
 from .utils import format_search_results_for_prompt
 from .utils.config import Settings, settings
+from SystemOne.decisions import should_continue_research
 
 ENABLE_CLUSTERING: bool = True  # 是否启用聚类采样
 MAX_CLUSTERED_RESULTS: int = 50  # 聚类后最大返回结果数
@@ -644,6 +645,9 @@ class DeepSearchAgent:
                 )
                 search_tool = "search_topic_globally"
 
+        if "enable_sentiment" in search_output:
+            search_kwargs["enable_sentiment"] = bool(search_output["enable_sentiment"])
+
         # 处理限制参数，使用配置文件中的默认值而不是agent提供的参数
         if search_tool == "search_hot_content":
             time_period = search_output.get("time_period", "week")
@@ -740,6 +744,19 @@ class DeepSearchAgent:
         for reflection_i in range(self.config.MAX_REFLECTIONS):
             logger.info(f"  - 反思 {reflection_i + 1}/{self.config.MAX_REFLECTIONS}...")
 
+            continue_research = should_continue_research(
+                {
+                    "title": paragraph.title,
+                    "content": paragraph.content,
+                    "paragraph_latest_state": paragraph.research.latest_summary,
+                    "reflection_index": reflection_i,
+                },
+                decision_id="insight.reflection.continue",
+            )
+            if continue_research is False:
+                logger.info("    System One: 当前数据库证据覆盖已足够，提前结束反思")
+                break
+
             # 准备反思输入
             reflection_input = {
                 "title": paragraph.title,
@@ -801,6 +818,9 @@ class DeepSearchAgent:
                         f"      search_topic_on_platform工具缺少平台参数，改用全局搜索"
                     )
                     search_tool = "search_topic_globally"
+
+            if "enable_sentiment" in reflection_output:
+                search_kwargs["enable_sentiment"] = bool(reflection_output["enable_sentiment"])
 
             # 处理限制参数
             if search_tool == "search_hot_content":
