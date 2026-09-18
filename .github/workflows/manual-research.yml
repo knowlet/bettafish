@@ -122,7 +122,7 @@ jobs:
             ReportEngine/nodes/word_budget_node.py \
             ReportEngine/nodes/document_layout_node.py \
             scripts/run_workflow_research.py
-          pytest -q tests/test_system_one_decisions.py tests/test_system_one_wiring.py tests/test_opencode_go.py
+          pytest -q tests/test_system_one_decisions.py tests/test_system_one_wiring.py tests/test_report_structure_guard.py tests/test_opencode_go.py
 
       - name: Run research
         env:

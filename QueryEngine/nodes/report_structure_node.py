@@ -8,6 +8,12 @@ from typing import Dict, Any, List
 from json.decoder import JSONDecodeError
 from loguru import logger
 
+from utils.report_structure_guard import (
+    build_safe_outline_retry_prompt,
+    build_topic_preserving_structure,
+    looks_like_refusal,
+)
+
 from .base_node import StateMutationNode
 from ..state.state import State
 from ..prompts import SYSTEM_PROMPT_REPORT_STRUCTURE
@@ -51,8 +57,24 @@ class ReportStructureNode(StateMutationNode):
         try:
             logger.info(f"正在为查询生成报告结构: {self.query}")
             
-            # 调用LLM
-            response = self.llm_client.stream_invoke_to_string(SYSTEM_PROMPT_REPORT_STRUCTURE, self.query)
+            # 调用LLM生成结构。部分供应商可能对包含暴力词汇的
+            # 合法新闻研究主题误触 refusal；遇到 refusal 只做一次
+            # 明确的“公开信息事实研究”重试，仍失败则使用保留原主题的
+            # deterministic fallback，绝不切换成无关的泛化研究主题。
+            response = self.llm_client.stream_invoke_to_string(
+                SYSTEM_PROMPT_REPORT_STRUCTURE,
+                self.query,
+            )
+            if looks_like_refusal(response):
+                logger.warning("报告结构模型返回拒绝响应，按公开事实研究范围重试一次")
+                retry_prompt = build_safe_outline_retry_prompt(self.query)
+                response = self.llm_client.stream_invoke_to_string(
+                    SYSTEM_PROMPT_REPORT_STRUCTURE,
+                    retry_prompt,
+                )
+                if looks_like_refusal(response):
+                    logger.warning("报告结构模型再次拒绝，使用保留原查询主题的确定性结构")
+                    return build_topic_preserving_structure(self.query)
             
             # 处理响应
             processed_response = self.process_output(response)
@@ -81,6 +103,12 @@ class ReportStructureNode(StateMutationNode):
             
             # 记录清理后的输出用于调试
             logger.info(f"清理后的输出: {cleaned_output}")
+
+            # process_output 也必须能独立防御 refusal，避免未来其他调用路径
+            # 绕过 run() 的重试逻辑。
+            if looks_like_refusal(cleaned_output):
+                logger.warning("报告结构输出是拒绝响应，使用保留原查询主题的确定性结构")
+                return build_topic_preserving_structure(self.query)
             
             # 解析JSON
             try:
@@ -153,17 +181,8 @@ class ReportStructureNode(StateMutationNode):
         Returns:
             默认的报告结构列表
         """
-        logger.info("生成默认报告结构")
-        return [
-            {
-                "title": "研究概述",
-                "content": "对查询主题进行总体概述和分析"
-            },
-            {
-                "title": "深度分析",
-                "content": "深入分析查询主题的各个方面"
-            }
-        ]
+        logger.info("生成保留原查询主题的默认报告结构")
+        return build_topic_preserving_structure(self.query)
     
     def mutate_state(self, input_data: Any = None, state: State = None, **kwargs) -> State:
         """

@@ -124,3 +124,21 @@ Before the free-form keyword-expansion LLM runs, Jev judges whether expansion is
 materially useful. Concrete event/person/organization/product queries use direct
 deterministic tokens and skip that LLM call. Abstract or compound analytical queries
 retain the existing LLM expansion path. System One failure is fail-open to legacy behavior.
+
+
+### Report-structure refusal guard
+
+The report-structure LLM is upstream of every search and Jev decision. A provider
+refusal or malformed outline must therefore never silently turn into a generic
+unrelated research topic. Query/Media/Insight now share a guard with this policy:
+
+1. detect common refusal responses;
+2. retry once with the benign scope made explicit: public-information research
+   and fact checking only, with no operational harmful guidance;
+3. if the retry still fails, build five deterministic sections that each retain
+   the exact original query;
+4. malformed/non-JSON output uses the same topic-preserving fallback.
+
+This fixes the failure mode observed in run 35323864180 where the structure model
+returned a refusal for "广州大学城随机捅人" and the old fallback replaced it with
+generic "研究概述 / 深度分析", causing every downstream search to drift off-topic.
