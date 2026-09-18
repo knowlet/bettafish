@@ -8,6 +8,8 @@ from typing import Dict, Any
 from json.decoder import JSONDecodeError
 from loguru import logger
 
+from SystemOne.decisions import choose_query_search_tool
+
 from .base_node import BaseNode
 from ..prompts import SYSTEM_PROMPT_FIRST_SEARCH, SYSTEM_PROMPT_REFLECTION
 from ..utils.text_processing import (
@@ -70,6 +72,16 @@ class FirstSearchNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+
+            # System One owns the closed-set tool-routing decision. The LLM
+            # remains responsible only for generating the open-ended query text.
+            system_one_route = choose_query_search_tool(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="initial",
+            )
+            if system_one_route:
+                processed_response.update(system_one_route)
             
             logger.info(f"生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response
@@ -205,6 +217,14 @@ class ReflectionNode(BaseNode):
             
             # 处理响应
             processed_response = self.process_output(response)
+
+            system_one_route = choose_query_search_tool(
+                input_data=input_data,
+                generated_query=processed_response.get("search_query", ""),
+                phase="reflection",
+            )
+            if system_one_route:
+                processed_response.update(system_one_route)
             
             logger.info(f"反思生成搜索查询: {processed_response.get('search_query', 'N/A')}")
             return processed_response

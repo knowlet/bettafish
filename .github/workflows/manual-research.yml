@@ -1,0 +1,103 @@
+name: Manual Research (System One)
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Research question"
+        required: true
+        type: string
+      max_reflections:
+        description: "Maximum reflection/search iterations per section"
+        required: true
+        default: "2"
+        type: choice
+        options: ["0", "1", "2", "3"]
+      use_system_one:
+        description: "Use TypeSafe System One / Jev for bounded decisions"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      MODEL_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      MODEL_NAME: ${{ secrets.MODEL_NAME }}
+
+      QUERY_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      QUERY_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      QUERY_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      MEDIA_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      MEDIA_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      MEDIA_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      INSIGHT_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      INSIGHT_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      INSIGHT_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      REPORT_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      REPORT_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      REPORT_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      MINDSPIDER_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      MINDSPIDER_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      MINDSPIDER_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      FORUM_HOST_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      FORUM_HOST_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      FORUM_HOST_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      KEYWORD_OPTIMIZER_API_KEY: ${{ secrets.MODEL_API_KEY }}
+      KEYWORD_OPTIMIZER_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
+      KEYWORD_OPTIMIZER_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      ANSPIRE_API_KEY: ${{ secrets.ANSPIRE_API_KEY }}
+      SEARCH_TOOL_TYPE: "AnspireAPI"
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+
+      SYSTEM_ONE_ENABLED: ${{ inputs.use_system_one }}
+      SYSTEM_ONE_MODEL: "jev-latest"
+      SYSTEM_ONE_TRACE_PATH: "artifacts/system_one_trace.jsonl"
+      MAX_REFLECTIONS: ${{ inputs.max_reflections }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements-actions.txt
+
+      - name: Install headless dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-actions.txt
+
+      - name: Validate System One decision layer
+        run: |
+          python -m compileall -q SystemOne QueryEngine scripts/run_workflow_research.py ReportEngine/nodes/template_selection_node.py
+          pytest -q tests/test_system_one_decisions.py
+
+      - name: Run research
+        env:
+          RESEARCH_QUERY: ${{ inputs.query }}
+        run: |
+          python scripts/run_workflow_research.py \
+            --query "$RESEARCH_QUERY" \
+            --output-dir artifacts
+
+      - name: Upload research artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bettafish-research-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

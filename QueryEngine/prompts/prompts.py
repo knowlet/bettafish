@@ -33,12 +33,9 @@ output_schema_first_search = {
     "type": "object",
     "properties": {
         "search_query": {"type": "string"},
-        "search_tool": {"type": "string"},
-        "reasoning": {"type": "string"},
-        "start_date": {"type": "string", "description": "开始日期，格式YYYY-MM-DD，仅search_news_by_date工具需要"},
-        "end_date": {"type": "string", "description": "结束日期，格式YYYY-MM-DD，仅search_news_by_date工具需要"}
+        "reasoning": {"type": "string"}
     },
-    "required": ["search_query", "search_tool", "reasoning"]
+    "required": ["search_query", "reasoning"]
 }
 
 # 首次总结输入Schema
@@ -78,12 +75,9 @@ output_schema_reflection = {
     "type": "object",
     "properties": {
         "search_query": {"type": "string"},
-        "search_tool": {"type": "string"},
-        "reasoning": {"type": "string"},
-        "start_date": {"type": "string", "description": "开始日期，格式YYYY-MM-DD，仅search_news_by_date工具需要"},
-        "end_date": {"type": "string", "description": "结束日期，格式YYYY-MM-DD，仅search_news_by_date工具需要"}
+        "reasoning": {"type": "string"}
     },
-    "required": ["search_query", "search_tool", "reasoning"]
+    "required": ["search_query", "reasoning"]
 }
 
 # 反思总结输入Schema
@@ -141,55 +135,23 @@ SYSTEM_PROMPT_REPORT_STRUCTURE = f"""
 
 # 每个段落第一次搜索的系统提示词
 SYSTEM_PROMPT_FIRST_SEARCH = f"""
-你是一位深度研究助手。你将获得报告中的一个段落，其标题和预期内容将按照以下JSON模式定义提供：
+你是一位深度研究助手。你将获得报告中的一个段落，其标题和预期内容按照以下JSON模式提供：
 
 <INPUT JSON SCHEMA>
 {json.dumps(input_schema_first_search, indent=2, ensure_ascii=False)}
 </INPUT JSON SCHEMA>
 
-你可以使用以下6种专业的新闻搜索工具：
+你的任务只负责生成最有效的网络检索查询：
+1. 用尽量少但信息密度高的关键词覆盖段落核心问题。
+2. 对可疑事实优先设计能交叉验证、寻找一手来源或反例的查询。
+3. 不要选择搜索工具；工具路由由独立的 System One 决策层完成。
+4. reasoning 只需简短说明这个查询要补足什么证据。
 
-1. **basic_search_news** - 基础新闻搜索工具
-   - 适用于：一般性的新闻搜索，不确定需要何种特定搜索时
-   - 特点：快速、标准的通用搜索，是最常用的基础工具
-
-2. **deep_search_news** - 深度新闻分析工具
-   - 适用于：需要全面深入了解某个主题时
-   - 特点：提供最详细的分析结果，包含高级AI摘要
-
-3. **search_news_last_24_hours** - 24小时最新新闻工具
-   - 适用于：需要了解最新动态、突发事件时
-   - 特点：只搜索过去24小时的新闻
-
-4. **search_news_last_week** - 本周新闻工具
-   - 适用于：需要了解近期发展趋势时
-   - 特点：搜索过去一周的新闻报道
-
-5. **search_images_for_news** - 图片搜索工具
-   - 适用于：需要可视化信息、图片资料时
-   - 特点：提供相关图片和图片描述
-
-6. **search_news_by_date** - 按日期范围搜索工具
-   - 适用于：需要研究特定历史时期时
-   - 特点：可以指定开始和结束日期进行搜索
-   - 特殊要求：需要提供start_date和end_date参数，格式为'YYYY-MM-DD'
-   - 注意：只有这个工具需要额外的时间参数
-
-你的任务是：
-1. 根据段落主题选择最合适的搜索工具
-2. 制定最佳的搜索查询
-3. 如果选择search_news_by_date工具，必须同时提供start_date和end_date参数（格式：YYYY-MM-DD）
-4. 解释你的选择理由
-5. 仔细核查新闻中的可疑点，破除谣言和误导，尽力还原事件原貌
-
-注意：除了search_news_by_date工具外，其他工具都不需要额外参数。
-请按照以下JSON模式定义格式化输出（文字请使用中文）：
-
+请按照以下JSON模式输出（文字请使用中文）：
 <OUTPUT JSON SCHEMA>
 {json.dumps(output_schema_first_search, indent=2, ensure_ascii=False)}
 </OUTPUT JSON SCHEMA>
 
-确保输出是一个符合上述输出JSON模式定义的JSON对象。
 只返回JSON对象，不要有解释或额外文本。
 """
 
@@ -269,37 +231,23 @@ SYSTEM_PROMPT_FIRST_SUMMARY = f"""
 
 # 反思(Reflect)的系统提示词
 SYSTEM_PROMPT_REFLECTION = f"""
-你是一位深度研究助手。你负责为研究报告构建全面的段落。你将获得段落标题、计划内容摘要，以及你已经创建的段落最新状态，所有这些都将按照以下JSON模式定义提供：
+你是一位深度研究助手。你将获得段落标题、预期内容，以及当前已经形成的段落最新状态：
 
 <INPUT JSON SCHEMA>
 {json.dumps(input_schema_reflection, indent=2, ensure_ascii=False)}
 </INPUT JSON SCHEMA>
 
-你可以使用以下6种专业的新闻搜索工具：
+当前调用代表系统认为仍可能存在值得补足的证据缺口。你的任务是：
+1. 找出一个最重要、尚未充分覆盖或需要交叉验证的事实缺口。
+2. 为这个缺口生成一个精确的网络检索查询。
+3. 不要选择搜索工具；工具路由由独立的 System One 决策层完成。
+4. reasoning 只需简短说明该查询补足的证据缺口。
 
-1. **basic_search_news** - 基础新闻搜索工具
-2. **deep_search_news** - 深度新闻分析工具
-3. **search_news_last_24_hours** - 24小时最新新闻工具  
-4. **search_news_last_week** - 本周新闻工具
-5. **search_images_for_news** - 图片搜索工具
-6. **search_news_by_date** - 按日期范围搜索工具（需要时间参数）
-
-你的任务是：
-1. 反思段落文本的当前状态，思考是否遗漏了主题的某些关键方面
-2. 选择最合适的搜索工具来补充缺失信息
-3. 制定精确的搜索查询
-4. 如果选择search_news_by_date工具，必须同时提供start_date和end_date参数（格式：YYYY-MM-DD）
-5. 解释你的选择和推理
-6. 仔细核查新闻中的可疑点，破除谣言和误导，尽力还原事件原貌
-
-注意：除了search_news_by_date工具外，其他工具都不需要额外参数。
-请按照以下JSON模式定义格式化输出：
-
+请按照以下JSON模式输出：
 <OUTPUT JSON SCHEMA>
 {json.dumps(output_schema_reflection, indent=2, ensure_ascii=False)}
 </OUTPUT JSON SCHEMA>
 
-确保输出是一个符合上述输出JSON模式定义的JSON对象。
 只返回JSON对象，不要有解释或额外文本。
 """
 

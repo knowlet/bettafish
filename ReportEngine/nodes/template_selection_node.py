@@ -10,6 +10,8 @@ import json
 from typing import Dict, Any, List, Optional
 from loguru import logger
 
+from SystemOne.decisions import choose_report_template
+
 from .base_node import BaseNode
 from ..prompts import SYSTEM_PROMPT_TEMPLATE_SELECTION
 from ..utils.json_parser import RobustJSONParser, JSONParseError
@@ -65,6 +67,24 @@ class TemplateSelectionNode(BaseNode):
         if not available_templates:
             logger.info("未找到预设模板，使用内置默认模板")
             return self._get_fallback_template()
+
+        # Template selection is a closed-set decision, so prefer System One.
+        # The existing LLM path remains the fail-open fallback.
+        try:
+            system_one_result = choose_report_template(
+                query=query,
+                reports=reports,
+                forum_logs=forum_logs,
+                available_templates=available_templates,
+            )
+            if system_one_result:
+                logger.info(
+                    f"System One选择模板: {system_one_result['template_name']} "
+                    f"(confidence={system_one_result.get('system_one_confidence', 'N/A')})"
+                )
+                return system_one_result
+        except Exception as e:
+            logger.warning(f"System One模板选择失败，回退LLM: {str(e)}")
         
         # 使用LLM进行模板选择
         try:

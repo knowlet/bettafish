@@ -23,6 +23,8 @@ from .tools import TavilyNewsAgency, TavilyResponse
 from .utils import Settings, format_search_results_for_prompt
 from loguru import logger
 
+from SystemOne.decisions import should_continue_research
+
 class DeepSearchAgent:
     """Deep Search Agent主类"""
     
@@ -310,6 +312,19 @@ class DeepSearchAgent:
         
         for reflection_i in range(self.config.MAX_REFLECTIONS):
             logger.info(f"  - 反思 {reflection_i + 1}/{self.config.MAX_REFLECTIONS}...")
+
+            # A cheap System One gate can stop the expensive
+            # reflection-query -> web-search -> reflection-summary chain early.
+            # API errors / low confidence return None and preserve the old flow.
+            continue_research = should_continue_research({
+                "title": paragraph.title,
+                "content": paragraph.content,
+                "paragraph_latest_state": paragraph.research.latest_summary,
+                "reflection_index": reflection_i,
+            })
+            if continue_research is False:
+                logger.info("    System One: 当前证据覆盖已足够，提前结束反思循环")
+                break
             
             # 准备反思输入
             reflection_input = {
