@@ -11,12 +11,16 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Archive tracked source only (no credentials)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Archive tracked source and public SDK wheels (no credentials)
         shell: bash
         run: |
-          mkdir -p /tmp/source-snapshot
+          mkdir -p /tmp/source-snapshot/wheels
           git ls-files -z '*.py' '*.md' '*.txt' '*.toml' '*.ini' '*.yml' '*.yaml' '.env.example' | tar --null -T - -czf /tmp/source-snapshot/source.tar.gz
           git rev-parse HEAD > /tmp/source-snapshot/commit.txt
+          python -m pip download --only-binary=:all: --dest /tmp/source-snapshot/wheels openai tavily-python
       - uses: actions/upload-artifact@v4
         with:
           name: research-source-snapshot
