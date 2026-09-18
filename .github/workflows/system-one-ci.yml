@@ -11,6 +11,7 @@ on:
       - "ForumEngine/**"
       - "ReportEngine/**"
       - "tests/test_system_one_*.py"
+      - "tests/test_report_structure_guard.py"
       - "requirements-actions.txt"
       - ".github/workflows/system-one-ci.yml"
   pull_request:
@@ -22,6 +23,7 @@ on:
       - "ForumEngine/**"
       - "ReportEngine/**"
       - "tests/test_system_one_*.py"
+      - "tests/test_report_structure_guard.py"
       - "requirements-actions.txt"
       - ".github/workflows/system-one-ci.yml"
 
