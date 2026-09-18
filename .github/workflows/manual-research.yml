@@ -29,6 +29,8 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: ${{ github.workspace }}
+      OPENCODE_SESSION_ID: bettafish-${{ github.run_id }}
+      OPENCODE_USER_AGENT: bettafish-github-actions/1.0
       MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
       MODEL_BASE_URL: ${{ vars.MODEL_BASE_URL }}
       MODEL_NAME: ${{ vars.MODEL_NAME }}

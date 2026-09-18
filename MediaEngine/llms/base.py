@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Generator
 from loguru import logger
 
 from openai import OpenAI
+from utils.opencode_go import get_opencode_go_headers
 
 # Ensure project-level retry helper is importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -55,6 +56,11 @@ class LLMClient:
         }
         if base_url:
             client_kwargs["base_url"] = base_url
+
+        opencode_headers = get_opencode_go_headers(base_url)
+        if opencode_headers:
+            client_kwargs["default_headers"] = opencode_headers
+            logger.info("OpenCode Go headers enabled (stable x-opencode-session)")
         self.client = OpenAI(**client_kwargs)
 
     @with_retry(LLM_RETRY_CONFIG)

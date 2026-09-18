@@ -4,6 +4,7 @@
 """
 
 from openai import OpenAI
+from utils.opencode_go import get_opencode_go_headers
 import sys
 import os
 from typing import List, Dict, Any, Optional
@@ -45,10 +46,14 @@ class ForumHost:
 
         self.base_url = base_url or settings.FORUM_HOST_BASE_URL
 
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        client_kwargs = {
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+        }
+        opencode_headers = get_opencode_go_headers(self.base_url)
+        if opencode_headers:
+            client_kwargs["default_headers"] = opencode_headers
+        self.client = OpenAI(**client_kwargs)
         self.model = model_name or settings.FORUM_HOST_MODEL_NAME  # Use configured model
 
         # Track previous summaries to avoid duplicates
