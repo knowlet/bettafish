@@ -9,6 +9,8 @@ from typing import Any, Dict, List
 
 from loguru import logger
 
+from SystemOne.decisions import apply_layout_controls
+
 from ..core import TemplateSection
 from ..prompts import (
     SYSTEM_PROMPT_DOCUMENT_LAYOUT,
@@ -82,6 +84,13 @@ class DocumentLayoutNode(BaseNode):
             top_p=0.9,
         )
         design = self._parse_response(response)
+        design = apply_layout_controls(
+            design=design,
+            sections=[section.to_dict() for section in sections],
+            query=query,
+        )
+        if design.get("layoutDecisionSource") == "system_one":
+            logger.info("SWOT/PEST章节适用性已由 System One / Jev 判定")
         logger.info("文档标题/目录设计已生成")
         return design
 

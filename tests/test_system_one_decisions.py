@@ -78,3 +78,30 @@ def test_word_budget_is_deterministic_after_scores(monkeypatch):
     assert plan["decision_source"] == "system_one"
     assert sum(x["targetWords"] for x in plan["chapters"]) == 10000
     assert plan["chapters"][0]["targetWords"] > plan["chapters"][1]["targetWords"]
+
+
+
+def test_layout_controls_enforce_single_swot_and_pest(monkeypatch):
+    fake = FakeClient({"answers": {
+        "s0_swot": {"noul": 0.9}, "s0_pest": {"noul": 0.2},
+        "s1_swot": {"noul": 0.8}, "s1_pest": {"noul": 0.95},
+    }})
+    monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
+    design = {
+        "tocPlan": [
+            {"chapterId": "S1", "display": "一"},
+            {"chapterId": "S2", "display": "二"},
+        ]
+    }
+    result = decisions.apply_layout_controls(
+        design=design,
+        sections=[
+            {"chapterId": "S1", "title": "内部能力"},
+            {"chapterId": "S2", "title": "宏观环境"},
+        ],
+        query="分析公司战略",
+    )
+    assert result["tocPlan"][0]["allowSwot"] is True
+    assert result["tocPlan"][1]["allowSwot"] is False
+    assert result["tocPlan"][1]["allowPest"] is True
+    assert result["layoutDecisionSource"] == "system_one"

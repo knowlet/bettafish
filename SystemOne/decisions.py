@@ -6,6 +6,7 @@ judgments (Choice / Score / Noul).
 
 from __future__ import annotations
 
+import copy
 import os
 import re
 from datetime import datetime
@@ -439,3 +440,96 @@ def plan_word_budget(*, sections: Sequence[Dict[str, Any]], query: str, reports:
         "chapters": chapters,
         "decision_source": "system_one",
     }
+
+
+
+def apply_layout_controls(
+    *,
+    design: Dict[str, Any],
+    sections: Sequence[Dict[str, Any]],
+    query: str,
+) -> Dict[str, Any]:
+    """Let Jev own bounded SWOT/PEST applicability flags.
+
+    The report schema allows at most one SWOT chapter and at most one PEST
+    chapter. We ask all chapter judgments in parallel, then enforce that global
+    constraint deterministically by taking the highest Noul above threshold.
+    """
+    toc_plan = design.get("tocPlan")
+    if not isinstance(toc_plan, list) or not toc_plan:
+        return design
+
+    state_sections = []
+    questions: Dict[str, Dict[str, Any]] = {}
+    for idx, section in enumerate(sections):
+        state_sections.append(
+            {
+                "chapterId": section.get("chapterId") or f"S{idx + 1}",
+                "title": section.get("title", ""),
+                "outline": section.get("outline", []),
+            }
+        )
+        questions[f"s{idx}_swot"] = {
+            "type": "noul",
+            "instructions": (
+                f"Would a SWOT framework materially improve analysis in sections[{idx}] "
+                "for the user's query?"
+            ),
+            "criteria": {
+                "true": "SWOT is genuinely useful for this chapter's analytical goal.",
+                "false": "SWOT would be forced, redundant, or decorative.",
+            },
+        }
+        questions[f"s{idx}_pest"] = {
+            "type": "noul",
+            "instructions": (
+                f"Would a PEST framework materially improve analysis in sections[{idx}] "
+                "for the user's query?"
+            ),
+            "criteria": {
+                "true": "Political/economic/social/technological decomposition is genuinely useful.",
+                "false": "PEST would be forced, redundant, or decorative.",
+            },
+        }
+
+    result = get_system_one_client().evaluate(
+        state={"query": query, "sections": state_sections},
+        questions=questions,
+        decision_id="report.layout_controls",
+    )
+    if not result:
+        return design
+
+    threshold = _float_env("SYSTEM_ONE_LAYOUT_FRAMEWORK_THRESHOLD", 0.60)
+    swot_scores = []
+    pest_scores = []
+    for idx in range(len(state_sections)):
+        swot = _noul_value(_answer(result, f"s{idx}_swot"))
+        pest = _noul_value(_answer(result, f"s{idx}_pest"))
+        if swot is not None:
+            swot_scores.append((swot, idx))
+        if pest is not None:
+            pest_scores.append((pest, idx))
+
+    swot_idx = max(swot_scores, default=(0.0, -1))[1]
+    swot_prob = max(swot_scores, default=(0.0, -1))[0]
+    pest_idx = max(pest_scores, default=(0.0, -1))[1]
+    pest_prob = max(pest_scores, default=(0.0, -1))[0]
+
+    updated = copy.deepcopy(design)
+    toc = updated.get("tocPlan") or []
+    section_index = {
+        str(section.get("chapterId") or f"S{idx + 1}"): idx
+        for idx, section in enumerate(state_sections)
+    }
+
+    for entry_idx, entry in enumerate(toc):
+        if not isinstance(entry, dict):
+            continue
+        chapter_id = str(entry.get("chapterId") or "")
+        idx = section_index.get(chapter_id, entry_idx if entry_idx < len(state_sections) else -1)
+        entry["allowSwot"] = bool(idx == swot_idx and swot_prob >= threshold)
+        entry["allowPest"] = bool(idx == pest_idx and pest_prob >= threshold)
+
+    updated["layoutDecisionSource"] = "system_one"
+    return updated
