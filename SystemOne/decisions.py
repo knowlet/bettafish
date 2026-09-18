@@ -59,21 +59,14 @@ def _answer(result: Optional[Dict[str, Any]], question_id: str) -> Optional[Dict
         value = answers.get(question_id)
         if isinstance(value, dict):
             return value
-    elif isinstance(answers, list):
-        for item in answers:
-            if isinstance(item, dict) and item.get("id") == question_id:
-                return item
     return None
 
 
 def _choice_value(answer: Optional[Dict[str, Any]]) -> Optional[str]:
     if not answer:
         return None
-    for key in ("choice", "selected", "value"):
-        value = answer.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
+    value = answer.get("choice")
+    return value if isinstance(value, str) and value else None
 
 
 def _confidence(answer: Optional[Dict[str, Any]], choice: Optional[str] = None) -> float:
@@ -95,11 +88,8 @@ def _confidence(answer: Optional[Dict[str, Any]], choice: Optional[str] = None) 
 def _noul_value(answer: Optional[Dict[str, Any]]) -> Optional[float]:
     if not answer:
         return None
-    for key in ("noul", "probability", "score", "value"):
-        value = answer.get(key)
-        if isinstance(value, (int, float)):
-            return float(value)
-    return None
+    value = answer.get("noul")
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def extract_explicit_date_range(text: str) -> Optional[Tuple[str, str]]:
@@ -149,18 +139,17 @@ def choose_query_search_tool(
             "generated_query": generated_query,
             "available_tools": list(criteria),
         },
-        questions=[
-            {
-                "id": "search_tool",
+        questions={
+            "search_tool": {
                 "type": "choice",
                 "instructions": (
-                    "Choose the single search tool most likely to retrieve the evidence "
-                    "needed for this section. Prefer the basic tool unless a criterion "
+                    "Which single search tool is most likely to retrieve the evidence "
+                    "needed for this section? Prefer the basic tool unless a criterion "
                     "for recency, depth, visuals, or an explicit date range is clearly met."
                 ),
                 "criteria": criteria,
             }
-        ],
+        },
         decision_id=f"query.search_tool.{phase}",
     )
     answer = _answer(result, "search_tool")
@@ -187,22 +176,28 @@ def choose_query_search_tool(
 
 
 def should_continue_research(state: Dict[str, Any]) -> Optional[bool]:
-    """Use a scalar Jev judgment as an early-stop gate for reflection."""
+    """Use a Noul probability as an early-stop gate for reflection."""
     result = get_system_one_client().evaluate(
         state=state,
-        questions=[
-            {
-                "id": "continue_research",
+        questions={
+            "continue_research": {
                 "type": "noul",
                 "instructions": (
-                    "Estimate how materially useful one more targeted web search would be "
-                    "for factual coverage of this section. 0 means the current summary "
-                    "already covers the requested scope with enough evidence and another "
-                    "search is unlikely to add material value. 1 means there is a clear, "
-                    "important evidence gap or unresolved factual uncertainty."
+                    "Would one more targeted web search materially improve the factual "
+                    "coverage of this section?"
                 ),
+                "criteria": {
+                    "true": (
+                        "There is a clear important evidence gap, unresolved factual "
+                        "uncertainty, or missing perspective worth another search."
+                    ),
+                    "false": (
+                        "The current summary already covers the requested scope well "
+                        "enough that another search is unlikely to add material value."
+                    ),
+                },
             }
-        ],
+        },
         decision_id="query.reflection.continue",
     )
     value = _noul_value(_answer(result, "continue_research"))
@@ -260,17 +255,16 @@ def choose_report_template(
             "report_excerpts": [_report_excerpt(r) for r in reports[:4]],
             "forum_excerpt": (forum_logs or "")[:1200],
         },
-        questions=[
-            {
-                "id": "report_template",
+        questions={
+            "report_template": {
                 "type": "choice",
                 "instructions": (
-                    "Choose the single report template whose intended use best matches "
-                    "the user's request and the evidence being synthesized."
+                    "Which single report template best matches the user's request and "
+                    "the evidence being synthesized?"
                 ),
                 "criteria": criteria,
             }
-        ],
+        },
         decision_id="report.template",
     )
     answer = _answer(result, "report_template")

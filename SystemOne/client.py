@@ -9,7 +9,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import httpx
 from loguru import logger
@@ -61,7 +61,7 @@ class SystemOneClient:
         self,
         *,
         state: Dict[str, Any],
-        questions: Iterable[Dict[str, Any]],
+        questions: Mapping[str, Dict[str, Any]],
         decision_id: str,
     ) -> Optional[Dict[str, Any]]:
         if not self.enabled:
@@ -70,7 +70,7 @@ class SystemOneClient:
         payload = {
             "model": self.model,
             "state": state,
-            "questions": list(questions),
+            "questions": dict(questions),
         }
         started = time.perf_counter()
         try:
