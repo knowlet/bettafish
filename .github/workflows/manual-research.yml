@@ -7,6 +7,16 @@ on:
         description: "Research question"
         required: true
         type: string
+      model_name:
+        description: "LLM model name (leave blank to use MODEL_NAME secret)"
+        required: false
+        default: ""
+        type: string
+      model_base_url:
+        description: "OpenAI-compatible base URL (leave blank to use MODEL_BASE_URL secret / OpenAI default)"
+        required: false
+        default: ""
+        type: string
       max_reflections:
         description: "Maximum reflection/search iterations per section"
         required: true
@@ -29,30 +39,30 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
       MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      MODEL_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      MODEL_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
 
       QUERY_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      QUERY_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      QUERY_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      QUERY_ENGINE_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      QUERY_ENGINE_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       MEDIA_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      MEDIA_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      MEDIA_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      MEDIA_ENGINE_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      MEDIA_ENGINE_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       INSIGHT_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      INSIGHT_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      INSIGHT_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      INSIGHT_ENGINE_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      INSIGHT_ENGINE_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       REPORT_ENGINE_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      REPORT_ENGINE_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      REPORT_ENGINE_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      REPORT_ENGINE_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      REPORT_ENGINE_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       MINDSPIDER_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      MINDSPIDER_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      MINDSPIDER_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      MINDSPIDER_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      MINDSPIDER_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       FORUM_HOST_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      FORUM_HOST_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      FORUM_HOST_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      FORUM_HOST_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      FORUM_HOST_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
       KEYWORD_OPTIMIZER_API_KEY: ${{ secrets.MODEL_API_KEY }}
-      KEYWORD_OPTIMIZER_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-      KEYWORD_OPTIMIZER_MODEL_NAME: ${{ secrets.MODEL_NAME }}
+      KEYWORD_OPTIMIZER_BASE_URL: ${{ inputs.model_base_url || secrets.MODEL_BASE_URL }}
+      KEYWORD_OPTIMIZER_MODEL_NAME: ${{ inputs.model_name || secrets.MODEL_NAME }}
 
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       ANSPIRE_API_KEY: ${{ secrets.ANSPIRE_API_KEY }}
@@ -74,6 +84,33 @@ jobs:
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: requirements-actions.txt
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "$MODEL_API_KEY" ]] || missing+=("MODEL_API_KEY")
+          [[ -n "$MODEL_NAME" ]] || missing+=("MODEL_NAME (secret or workflow input model_name)")
+          [[ -n "$TAVILY_API_KEY" ]] || missing+=("TAVILY_API_KEY")
+          if [[ "$SYSTEM_ONE_ENABLED" == "true" && -z "$TYPESAFE_API_KEY" ]]; then
+            missing+=("TYPESAFE_API_KEY")
+          fi
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required configuration:\n'
+            printf '  - %s\n' "${missing[@]}"
+            echo
+            echo "MODEL_BASE_URL is optional only when the provider uses the OpenAI SDK default endpoint."
+            exit 1
+          fi
+
+          echo "Configuration OK"
+          echo "MODEL_NAME=$MODEL_NAME"
+          if [[ -n "$MODEL_BASE_URL" ]]; then
+            echo "MODEL_BASE_URL is configured"
+          else
+            echo "MODEL_BASE_URL is empty; OpenAI SDK default endpoint will be used"
+          fi
 
       - name: Install headless dependencies
         run: |
