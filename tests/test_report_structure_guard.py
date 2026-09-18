@@ -1,3 +1,11 @@
+import os
+
+# QueryEngine imports its Pydantic Settings at module-import time. These tests do
+# not call external services, but the required fields must exist before import.
+os.environ.setdefault("QUERY_ENGINE_API_KEY", "test-key")
+os.environ.setdefault("QUERY_ENGINE_MODEL_NAME", "test-model")
+os.environ.setdefault("TAVILY_API_KEY", "test-tavily")
+
 from QueryEngine.nodes.report_structure_node import ReportStructureNode
 from utils.report_structure_guard import (
     build_topic_preserving_structure,
