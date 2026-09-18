@@ -1,0 +1,66 @@
+name: System One CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SystemOne/**"
+      - "QueryEngine/**"
+      - "MediaEngine/**"
+      - "InsightEngine/**"
+      - "ForumEngine/**"
+      - "ReportEngine/**"
+      - "tests/test_system_one_*.py"
+      - "requirements-actions.txt"
+      - ".github/workflows/system-one-ci.yml"
+  pull_request:
+    paths:
+      - "SystemOne/**"
+      - "QueryEngine/**"
+      - "MediaEngine/**"
+      - "InsightEngine/**"
+      - "ForumEngine/**"
+      - "ReportEngine/**"
+      - "tests/test_system_one_*.py"
+      - "requirements-actions.txt"
+      - ".github/workflows/system-one-ci.yml"
+
+jobs:
+  system-one:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements-actions.txt
+
+      - name: Install lightweight test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-actions.txt
+
+      - name: Compile Jev-integrated runtime paths
+        run: |
+          python -m compileall -q \
+            SystemOne \
+            QueryEngine \
+            MediaEngine/nodes/search_node.py MediaEngine/agent.py MediaEngine/prompts/prompts.py \
+            InsightEngine/nodes/search_node.py InsightEngine/agent.py InsightEngine/prompts/prompts.py InsightEngine/tools/keyword_optimizer.py \
+            ForumEngine/monitor.py \
+            ReportEngine/nodes/template_selection_node.py \
+            ReportEngine/nodes/word_budget_node.py \
+            ReportEngine/nodes/document_layout_node.py
+
+      - name: Run System One tests
+        run: |
+          pytest -q \
+            tests/test_system_one_decisions.py \
+            tests/test_system_one_wiring.py \
+            tests/test_opencode_go.py

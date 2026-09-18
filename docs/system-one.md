@@ -7,17 +7,24 @@ good replacement for the latter, not for arbitrary prose generation.
 
 | Decision site | Fit for Jev | Status | Why |
 | --- | --- | --- | --- |
-| QueryEngine search-tool routing | Strong | Implemented | Closed set of six Tavily tools |
-| QueryEngine reflection continue/stop | Strong | Implemented | Value-of-information gate |
+| QueryEngine search-tool routing | Strong | Implemented | Closed Tavily tool set |
+| QueryEngine reflection continue/stop | Strong | Implemented | Value-of-information Noul gate |
+| Query/Media evidence triage | Strong | Implemented | Batched relevance/value/novelty Scores |
+| MediaEngine tool routing | Strong | Implemented | Provider-aware closed tool set |
+| MediaEngine reflection continue/stop | Strong | Implemented | Value-of-information Noul gate |
+| InsightEngine DB routing + parameters | Strong | Implemented | Tool/platform/time Choice + sentiment Noul in one fan-out |
+| InsightEngine reflection continue/stop | Strong | Implemented | Value-of-information Noul gate |
+| Insight keyword expansion | Strong | Implemented gate | Noul skips keyword-generation LLM for concrete queries |
+| Forum host intervention | Strong | Implemented gate | Noul + reason Choice before host LLM |
 | ReportEngine template selection | Strong | Implemented | Closed set of local templates |
-| Search-query generation | Poor | Keep LLM | Arbitrary text |
+| ReportEngine word budget | Strong | Implemented | Batched Scores + deterministic allocator replace planner LLM |
+| ReportEngine SWOT/PEST applicability | Strong | Implemented | Batched Noul judgments; code enforces max one each |
+| Search-query generation | Poor | Keep LLM | Arbitrary text generation |
 | First/reflection summaries | Poor | Keep LLM | Evidence synthesis |
-| Report structure/layout/word budget | Mixed | Keep LLM for now | Arbitrary structured output |
+| Report structure/title/hero copy | Poor | Keep LLM | Open-ended structured generation |
 | Chapter generation | Poor | Keep LLM | Long-form synthesis |
 | Forum host speech | Poor | Keep LLM | New prose and synthesis |
-| MediaEngine tool routing | Strong | Next | Different closed tool set |
-| InsightEngine DB-tool routing | Strong | Next | Different tool set / DB-dependent |
-| Evidence relevance / contradiction gates | Strong | Next | Good Score/Noul candidates after evals |
+| Free-form keyword generation | Mixed | Conditional LLM | Needed only when Jev says expansion is useful |
 
 ### Existing bug fixed by the split
 
