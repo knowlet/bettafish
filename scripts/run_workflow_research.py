@@ -6,8 +6,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# When executed as "python scripts/run_workflow_research.py", Python puts
+# scripts/ (not the repository root) on sys.path. Add the repo root explicitly
+# so package imports such as QueryEngine work both locally and in GitHub Actions.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def _apply_generic_model_env() -> None:

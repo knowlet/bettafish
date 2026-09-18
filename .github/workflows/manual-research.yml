@@ -28,6 +28,7 @@ jobs:
 
     env:
       PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
       MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
       MODEL_BASE_URL: ${{ vars.MODEL_BASE_URL }}
       MODEL_NAME: ${{ vars.MODEL_NAME }}
