@@ -50,14 +50,17 @@ Workflow: **Manual Research (System One)**
 
 Inputs: `query`, `max_reflections` (0..3), and `use_system_one`.
 
-Secrets wired by the workflow:
+Configuration wired by the workflow:
 
+Repository secrets:
 - `MODEL_API_KEY`
-- `MODEL_BASE_URL`
-- `MODEL_NAME`
 - `TAVILY_API_KEY`
 - `ANSPIRE_API_KEY`
 - `TYPESAFE_API_KEY`
+
+Repository variables:
+- `MODEL_BASE_URL`
+- `MODEL_NAME`
 
 The current headless job runs QueryEngine, so Tavily is the active search API.
 Anspire is wired for the rest of BettaFish but is not invoked by this job.
