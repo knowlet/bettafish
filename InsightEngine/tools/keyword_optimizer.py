@@ -14,6 +14,8 @@ from dataclasses import dataclass
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from config import settings
 from loguru import logger
+from SystemOne.decisions import should_expand_insight_keywords
+from utils.opencode_go import get_opencode_go_headers
 
 # 添加utils目录到Python路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -54,10 +56,14 @@ class KeywordOptimizer:
 
         self.base_url = base_url or settings.KEYWORD_OPTIMIZER_BASE_URL
 
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        client_kwargs = {
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+        }
+        opencode_headers = get_opencode_go_headers(self.base_url)
+        if opencode_headers:
+            client_kwargs["default_headers"] = opencode_headers
+        self.client = OpenAI(**client_kwargs)
         self.model = model_name or settings.KEYWORD_OPTIMIZER_MODEL_NAME
     
     def optimize_keywords(self, original_query: str, context: str = "") -> KeywordOptimizationResponse:
@@ -74,6 +80,20 @@ class KeywordOptimizer:
         logger.info(f"🔍 关键词优化中间件: 处理查询 '{original_query}'")
         
         try:
+            expand_keywords = should_expand_insight_keywords(original_query, context)
+            if expand_keywords is False:
+                direct_keywords = self._fallback_keyword_extraction(original_query)
+                logger.info(
+                    "⚡ System One: 查询已足够具体，跳过关键词扩展 LLM "
+                    f"({len(direct_keywords)} 个直接关键词)"
+                )
+                return KeywordOptimizationResponse(
+                    original_query=original_query,
+                    optimized_keywords=direct_keywords,
+                    reasoning="System One judged free-form keyword expansion unnecessary",
+                    success=True,
+                )
+
             # 构建优化prompt
             system_prompt = self._build_system_prompt()
             user_prompt = self._build_user_prompt(original_query, context)

@@ -80,6 +80,7 @@ The following bounded decisions are now owned by System One / Jev:
 - MediaEngine evidence triage: relevance / evidence value / novelty (batched Scores).
 - InsightEngine database-tool routing plus platform, time window and sentiment decision in one speculative fan-out request (Choice + Noul).
 - InsightEngine reflection early-stop (Noul).
+- InsightEngine KeywordOptimizer expansion gate (Noul): concrete entity/event queries skip the free-form keyword-expansion LLM; abstract queries keep the legacy LLM expansion path.
 - ForumEngine host-intervention gate (Noul + reason Choice).
 - ReportEngine template selection (Choice).
 - ReportEngine word-budget planning: chapter importance / evidence density / analytical complexity (batched Scores) followed by deterministic allocation.
@@ -108,3 +109,11 @@ Every five agent speeches are judged first. If `host_needed < SYSTEM_ONE_HOST_TH
 ### Word budget
 
 WordBudgetNode first asks three Score questions per chapter (importance, evidence density, complexity) in one request. Python combines them with 0.50 / 0.30 / 0.20 weights and allocates the total word budget deterministically. The old LLM planner is retained only as fail-open fallback.
+
+
+### KeywordOptimizer expansion gate
+
+Before the free-form keyword-expansion LLM runs, Jev judges whether expansion is
+materially useful. Concrete event/person/organization/product queries use direct
+deterministic tokens and skip that LLM call. Abstract or compound analytical queries
+retain the existing LLM expansion path. System One failure is fail-open to legacy behavior.

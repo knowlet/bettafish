@@ -105,3 +105,15 @@ def test_layout_controls_enforce_single_swot_and_pest(monkeypatch):
     assert result["tocPlan"][1]["allowSwot"] is False
     assert result["tocPlan"][1]["allowPest"] is True
     assert result["layoutDecisionSource"] == "system_one"
+
+
+
+def test_keyword_expansion_gate(monkeypatch):
+    fake = FakeClient({"answers": {"expand_keywords": {"noul": 0.12}}})
+    monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
+    assert decisions.should_expand_insight_keywords("广州大学城随机捅人") is False
+
+    fake.result = {"answers": {"expand_keywords": {"noul": 0.91}}}
+    assert decisions.should_expand_insight_keywords(
+        "品牌舆情管理未来趋势", "寻找贴近网民语言的同义词"
+    ) is True

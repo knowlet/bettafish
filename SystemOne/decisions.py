@@ -350,6 +350,46 @@ def decide_forum_host(forum_logs: Sequence[str]) -> Optional[Dict[str, Any]]:
     }
 
 
+
+def should_expand_insight_keywords(original_query: str, context: str = "") -> Optional[bool]:
+    """Gate the expensive free-form keyword-expansion LLM.
+
+    True means the query is too abstract/compound and benefits from social-language
+    expansion. False means the query is already a concrete searchable entity/event
+    and deterministic token extraction is sufficient. None preserves legacy behavior.
+    """
+    result = get_system_one_client().evaluate(
+        state={
+            "original_query": original_query,
+            "context": context,
+        },
+        questions={
+            "expand_keywords": {
+                "type": "noul",
+                "instructions": (
+                    "Does this database query materially benefit from generating multiple "
+                    "alternative social-media search keywords, rather than searching the "
+                    "concrete query terms directly?"
+                ),
+                "criteria": {
+                    "true": (
+                        "The query is abstract, analytical, uses formal language, contains "
+                        "multiple concepts, or likely needs colloquial aliases/synonyms."
+                    ),
+                    "false": (
+                        "The query already names a concrete event, person, organization, "
+                        "product, hashtag, or short phrase that can be searched directly."
+                    ),
+                },
+            }
+        },
+        decision_id="insight.keyword_expansion_gate",
+    )
+    probability = _noul_value(_answer(result, "expand_keywords"))
+    if probability is None:
+        return None
+    return probability >= _float_env("SYSTEM_ONE_KEYWORD_EXPANSION_THRESHOLD", 0.55)
+
 def _report_excerpt(report: Any, limit: int = 1200) -> str:
     if isinstance(report, dict):
         content = report.get("content", str(report))
