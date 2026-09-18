@@ -66,3 +66,45 @@ The current headless job runs QueryEngine, so Tavily is the active search API.
 Anspire is wired for the rest of BettaFish but is not invoked by this job.
 Artifacts contain `result.md`, `metadata.json`, and (when used)
 `system_one_trace.jsonl`.
+
+
+## Current Jev coverage
+
+The following bounded decisions are now owned by System One / Jev:
+
+- QueryEngine initial and reflection search-tool routing (Choice).
+- QueryEngine reflection early-stop (Noul).
+- QueryEngine evidence triage: relevance / evidence value / novelty (batched Scores).
+- MediaEngine initial and reflection search-tool routing with provider-aware options (Choice).
+- MediaEngine reflection early-stop (Noul).
+- MediaEngine evidence triage: relevance / evidence value / novelty (batched Scores).
+- InsightEngine database-tool routing plus platform, time window and sentiment decision in one speculative fan-out request (Choice + Noul).
+- InsightEngine reflection early-stop (Noul).
+- ForumEngine host-intervention gate (Noul + reason Choice).
+- ReportEngine template selection (Choice).
+- ReportEngine word-budget planning: chapter importance / evidence density / analytical complexity (batched Scores) followed by deterministic allocation.
+- ReportEngine SWOT / PEST applicability (batched Noul), with code enforcing at most one chapter for each framework.
+
+Open-ended generation remains with LLMs: search-query text, report structure/title/hero copy, summaries, reflection query text, chapter writing, final prose, Forum host speech, and free-form keyword generation.
+
+### Evidence triage
+
+For Query/Media search results, System One evaluates up to `SYSTEM_ONE_EVIDENCE_CANDIDATES` candidates in one request. Each result gets three independent Score questions:
+
+- relevance: 50%
+- evidence value: 35%
+- novelty: 15%
+
+Only the top `SYSTEM_ONE_EVIDENCE_MAX_RESULTS` are sent to the expensive summary LLM. System One failure preserves original ordering.
+
+### Insight fan-out
+
+Insight routing asks tool, platform, recency window and whether sentiment is useful in one request. The answers are independent and code uses only the relevant parameters for the selected tool.
+
+### Forum host gate
+
+Every five agent speeches are judged first. If `host_needed < SYSTEM_ONE_HOST_THRESHOLD`, the five speeches are consumed without paying for a host LLM turn. TypeSafe failure preserves the legacy host behavior.
+
+### Word budget
+
+WordBudgetNode first asks three Score questions per chapter (importance, evidence density, complexity) in one request. Python combines them with 0.50 / 0.30 / 0.20 weights and allocates the total word budget deterministically. The old LLM planner is retained only as fail-open fallback.
