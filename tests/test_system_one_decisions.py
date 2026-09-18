@@ -40,6 +40,8 @@ def test_insight_plan_batches_parameters(monkeypatch):
     assert plan["enable_sentiment"] is True
     assert len(fake.calls) == 1
     assert set(fake.calls[0]["questions"]) == {"search_tool", "platform", "time_period", "enable_sentiment"}
+    tool_criteria = fake.calls[0]["questions"]["search_tool"]["criteria"]
+    assert "analyze_sentiment" not in tool_criteria
 
 
 def test_evidence_triage_uses_batched_scores(monkeypatch):
@@ -117,3 +119,55 @@ def test_keyword_expansion_gate(monkeypatch):
     assert decisions.should_expand_insight_keywords(
         "品牌舆情管理未来趋势", "寻找贴近网民语言的同义词"
     ) is True
+
+
+
+def test_evidence_triage_partial_response_fails_open(monkeypatch):
+    fake = FakeClient({"answers": {
+        "r0_relevance": {"score": 3.0},
+        "r0_evidence": {"score": 3.0},
+        "r0_novelty": {"score": 3.0},
+        "r1_relevance": {"score": 3.0},
+        "r1_evidence": {"score": 3.0},
+        # r1_novelty intentionally missing
+        "r2_relevance": {"score": 3.0},
+        "r2_evidence": {"score": 3.0},
+        "r2_novelty": {"score": 3.0},
+    }})
+    monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
+    original = [
+        {"title": "first", "content": "a"},
+        {"title": "second", "content": "b"},
+        {"title": "third", "content": "c"},
+    ]
+    ranked = decisions.triage_evidence(
+        query="q",
+        section={"title": "s"},
+        results=original,
+        decision_id="test.partial",
+        max_results=2,
+    )
+    assert [item["title"] for item in ranked] == ["first", "second"]
+
+
+def test_word_budget_small_total_still_sums_exactly(monkeypatch):
+    fake = FakeClient({"answers": {
+        "s0_importance": {"score": 3.0}, "s0_evidence": {"score": 3.0}, "s0_complexity": {"score": 3.0},
+        "s1_importance": {"score": 2.0}, "s1_evidence": {"score": 2.0}, "s1_complexity": {"score": 2.0},
+        "s2_importance": {"score": 1.0}, "s2_evidence": {"score": 1.0}, "s2_complexity": {"score": 1.0},
+    }})
+    monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
+    plan = decisions.plan_word_budget(
+        sections=[
+            {"chapterId": "S1", "title": "A"},
+            {"chapterId": "S2", "title": "B"},
+            {"chapterId": "S3", "title": "C"},
+        ],
+        query="q",
+        reports={},
+        forum_logs="",
+        total_words=500,
+    )
+    targets = [chapter["targetWords"] for chapter in plan["chapters"]]
+    assert sum(targets) == 500
+    assert all(target >= 0 for target in targets)

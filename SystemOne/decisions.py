@@ -36,7 +36,6 @@ INSIGHT_SEARCH_CRITERIA = {
     "search_topic_by_date": "Search a topic inside an explicit historical date range.",
     "get_comments_for_topic": "Audience/user comments and reactions are the main evidence needed.",
     "search_topic_on_platform": "One specific social platform is explicitly required.",
-    "analyze_sentiment": "The main task is sentiment classification rather than retrieval.",
 }
 PLATFORM_CRITERIA = {
     "none": "No single platform is required.",
@@ -314,8 +313,19 @@ def triage_evidence(*, query: str, section: Dict[str, Any], results: Sequence[Di
         relevance = _score_value(_answer(result, f"r{idx}_relevance"))
         evidence = _score_value(_answer(result, f"r{idx}_evidence"))
         novelty = _score_value(_answer(result, f"r{idx}_novelty"))
-        utility = 0.0 if None in (relevance, evidence, novelty) else 0.50 * relevance + 0.35 * evidence + 0.15 * novelty
-        item["_system_one_evidence"] = {"relevance": relevance, "evidence_value": evidence, "novelty": novelty, "utility": round(utility, 4)}
+        if None in (relevance, evidence, novelty):
+            logger.warning(
+                "System One evidence triage returned an incomplete answer set; "
+                "preserving original result order"
+            )
+            return candidates[:max_results]
+        utility = 0.50 * relevance + 0.35 * evidence + 0.15 * novelty
+        item["_system_one_evidence"] = {
+            "relevance": relevance,
+            "evidence_value": evidence,
+            "novelty": novelty,
+            "utility": round(utility, 4),
+        }
         ranked.append((utility, idx, item))
     ranked.sort(key=lambda row: (-row[0], row[1]))
     return [item for _, _, item in ranked[:max_results]]
@@ -454,9 +464,25 @@ def plan_word_budget(*, sections: Sequence[Dict[str, Any]], query: str, reports:
         weight = max(0.1, 0.50 * importance + 0.30 * evidence + 0.20 * complexity)
         rows.append((section, importance, evidence, complexity, weight))
     total_weight = sum(row[4] for row in rows) or 1.0
-    targets = [max(250, int(round(total_words * row[4] / total_weight / 50.0) * 50)) for row in rows]
-    if targets:
-        targets[-1] = max(250, targets[-1] + total_words - sum(targets))
+    chapter_count = len(rows)
+    # Keep the historical 250-word floor when the total budget can support it.
+    # For small budgets, lower the floor so allocation remains mathematically valid.
+    base_words = min(250, total_words // chapter_count) if chapter_count else 0
+    distributable = max(0, total_words - base_words * chapter_count)
+    raw_extras = [distributable * row[4] / total_weight for row in rows]
+    integer_extras = [int(value) for value in raw_extras]
+    remainder = distributable - sum(integer_extras)
+    remainder_order = sorted(
+        range(chapter_count),
+        key=lambda idx: raw_extras[idx] - integer_extras[idx],
+        reverse=True,
+    )
+    for idx in remainder_order[:remainder]:
+        integer_extras[idx] += 1
+    targets = [
+        base_words + integer_extras[idx]
+        for idx in range(chapter_count)
+    ]
     chapters = []
     for idx, (section, importance, evidence, complexity, _) in enumerate(rows):
         target = targets[idx]
