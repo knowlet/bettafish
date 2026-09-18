@@ -5,69 +5,76 @@ class FakeClient:
     def __init__(self, result):
         self.result = result
         self.calls = []
-
     def evaluate(self, **kwargs):
         self.calls.append(kwargs)
         return self.result
 
 
-def test_extract_explicit_date_range():
-    assert decisions.extract_explicit_date_range(
-        "研究 2026-09-01 到 2026-09-05 的报道"
-    ) == ("2026-09-01", "2026-09-05")
-    assert decisions.extract_explicit_date_range("只有 2026-09-01") is None
-
-
-def test_query_tool_choice_and_date(monkeypatch):
-    fake = FakeClient(
-        {"answers": {"search_tool": {"choice": "search_news_by_date", "confidence": 0.91}}}
-    )
+def test_media_provider_filters_bocha_only_tools(monkeypatch):
+    fake = FakeClient({"answers": {"search_tool": {"choice": "search_last_week"}}})
     monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
-    routed = decisions.choose_query_search_tool(
-        input_data={"title": "历史事件", "content": "比较 2026-09-01 到 2026-09-05 的报道"},
-        generated_query="历史事件 报道",
-        phase="initial",
+    routed = decisions.choose_media_search_tool(
+        input_data={"title": "最近趋势", "content": "过去一周"},
+        generated_query="最近趋势", phase="initial", provider="AnspireAPI",
     )
-    assert routed["search_tool"] == "search_news_by_date"
-    assert routed["start_date"] == "2026-09-01"
-    assert routed["end_date"] == "2026-09-05"
+    assert routed["search_tool"] == "search_last_week"
+    criteria = fake.calls[0]["questions"]["search_tool"]["criteria"]
+    assert "web_search_only" not in criteria
+    assert "search_for_structured_data" not in criteria
 
 
-def test_low_confidence_choice_falls_back(monkeypatch):
-    fake = FakeClient(
-        {"answers": {"search_tool": {"choice": "deep_search_news", "confidence": 0.2}}}
-    )
+def test_insight_plan_batches_parameters(monkeypatch):
+    fake = FakeClient({"answers": {
+        "search_tool": {"choice": "search_topic_on_platform"},
+        "platform": {"choice": "weibo"},
+        "time_period": {"choice": "week"},
+        "enable_sentiment": {"noul": 0.8},
+    }})
     monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
-    assert decisions.choose_query_search_tool(
-        input_data={"title": "主题", "content": "一般研究"},
-        generated_query="主题",
-        phase="initial",
-    ) is None
-
-
-def test_reflection_gate(monkeypatch):
-    monkeypatch.setenv("SYSTEM_ONE_STOP_THRESHOLD", "0.30")
-    fake = FakeClient(
-        {"answers": {"continue_research": {"noul": 0.12, "confidence": 0.8}}}
+    plan = decisions.choose_insight_search_plan(
+        input_data={"title": "微博舆论", "content": "分析微博用户反应"},
+        generated_query="事件 微博", phase="initial",
     )
+    assert plan["search_tool"] == "search_topic_on_platform"
+    assert plan["platform"] == "weibo"
+    assert plan["enable_sentiment"] is True
+    assert len(fake.calls) == 1
+    assert set(fake.calls[0]["questions"]) == {"search_tool", "platform", "time_period", "enable_sentiment"}
+
+
+def test_evidence_triage_uses_batched_scores(monkeypatch):
+    answers = {}
+    for i in range(3):
+        answers[f"r{i}_relevance"] = {"score": float(i)}
+        answers[f"r{i}_evidence"] = {"score": float(i)}
+        answers[f"r{i}_novelty"] = {"score": float(i)}
+    fake = FakeClient({"answers": answers})
     monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
-    assert decisions.should_continue_research({"paragraph_latest_state": "完整"}) is False
-
-    fake.result = {"answers": {"continue_research": {"noul": 0.72, "confidence": 0.8}}}
-    assert decisions.should_continue_research({"paragraph_latest_state": "缺资料"}) is True
-
-
-def test_report_template_choice(monkeypatch):
-    fake = FakeClient(
-        {"answers": {"report_template": {"choice": "template_1", "confidence": 0.88}}}
+    ranked = decisions.triage_evidence(
+        query="q", section={"title": "s"},
+        results=[{"title": "a", "content": "a"}, {"title": "b", "content": "b"}, {"title": "c", "content": "c"}],
+        decision_id="test.evidence", max_results=2,
     )
+    assert [x["title"] for x in ranked] == ["c", "b"]
+    assert len(fake.calls[0]["questions"]) == 9
+
+
+def test_forum_host_gate(monkeypatch):
+    fake = FakeClient({"answers": {"host_needed": {"noul": 0.2}, "host_reason": {"choice": "none"}}})
     monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
-    templates = [
-        {"name": "A", "description": "品牌", "content": "# A"},
-        {"name": "B", "description": "危机", "content": "# B"},
-    ]
-    result = decisions.choose_report_template(
-        query="危机事件分析", reports=[], forum_logs="", available_templates=templates
+    assert decisions.decide_forum_host(["[00:00:00] [QUERY] ok"])["needed"] is False
+
+
+def test_word_budget_is_deterministic_after_scores(monkeypatch):
+    fake = FakeClient({"answers": {
+        "s0_importance": {"score": 3.0}, "s0_evidence": {"score": 3.0}, "s0_complexity": {"score": 2.0},
+        "s1_importance": {"score": 1.0}, "s1_evidence": {"score": 1.0}, "s1_complexity": {"score": 1.0},
+    }})
+    monkeypatch.setattr(decisions, "get_system_one_client", lambda: fake)
+    plan = decisions.plan_word_budget(
+        sections=[{"chapterId": "S1", "title": "核心", "outline": ["a"]}, {"chapterId": "S2", "title": "附录", "outline": []}],
+        query="q", reports={"query": "x"}, forum_logs="", total_words=10000,
     )
-    assert result["template_name"] == "B"
-    assert result["decision_source"] == "system_one"
+    assert plan["decision_source"] == "system_one"
+    assert sum(x["targetWords"] for x in plan["chapters"]) == 10000
+    assert plan["chapters"][0]["targetWords"] > plan["chapters"][1]["targetWords"]
