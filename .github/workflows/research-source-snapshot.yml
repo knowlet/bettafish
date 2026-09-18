@@ -1,0 +1,25 @@
+name: Research source snapshot
+on:
+  push:
+    branches: [fix/research-topic-integrity]
+    paths: [.github/workflows/research-source-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive tracked source only (no credentials)
+        shell: bash
+        run: |
+          mkdir -p /tmp/source-snapshot
+          git ls-files -z '*.py' '*.md' '*.txt' '*.toml' '*.ini' '*.yml' '*.yaml' '.env.example' | tar --null -T - -czf /tmp/source-snapshot/source.tar.gz
+          git rev-parse HEAD > /tmp/source-snapshot/commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-source-snapshot
+          path: /tmp/source-snapshot/
+          retention-days: 1
+          if-no-files-found: error
