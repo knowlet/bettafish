@@ -9,6 +9,8 @@ from typing import Any, Dict, List
 
 from loguru import logger
 
+from SystemOne.decisions import plan_word_budget
+
 from ..core import TemplateSection
 from ..prompts import (
     SYSTEM_PROMPT_WORD_BUDGET,
@@ -71,6 +73,20 @@ class WordBudgetNode(BaseNode):
             "reports": reports,
             "forumLogs": forum_logs,
         }
+        # Word-budget allocation is a bounded scoring/allocation problem.
+        # Let Jev score importance/evidence/complexity for all chapters in one
+        # request, then allocate words deterministically in Python.
+        system_one_plan = plan_word_budget(
+            sections=[section.to_dict() for section in sections],
+            query=query,
+            reports=reports,
+            forum_logs=forum_logs,
+        )
+        if system_one_plan:
+            logger.info("章节字数规划已由 System One / Jev 生成，无需调用规划LLM")
+            return system_one_plan
+
+        logger.info("System One篇幅规划不可用，回退原LLM规划流程")
         user = build_word_budget_prompt(payload)
         response = self.llm_client.stream_invoke_to_string(
             SYSTEM_PROMPT_WORD_BUDGET,

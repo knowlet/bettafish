@@ -13,6 +13,8 @@ from typing import Dict, Optional, List
 from threading import Lock
 from loguru import logger
 
+from SystemOne.decisions import decide_forum_host
+
 # 导入论坛主持人模块
 try:
     from .llm_host import generate_host_speech
@@ -536,6 +538,27 @@ class LogMonitor:
                 self.is_host_generating = False
                 return
             
+            host_decision = decide_forum_host(recent_speeches)
+            if host_decision is not None and not host_decision.get("needed", True):
+                logger.info(
+                    "ForumEngine: Jev判断无需主持人介入 "
+                    f"(p={host_decision.get('probability', 0):.3f}, "
+                    f"reason={host_decision.get('reason', 'unknown')})"
+                )
+                # Consume the batch so the same five speeches are not judged repeatedly.
+                self.agent_speeches_buffer = self.agent_speeches_buffer[5:]
+                self.is_host_generating = False
+                return
+
+            if host_decision is not None:
+                logger.info(
+                    "ForumEngine: Jev建议主持人介入 "
+                    f"(p={host_decision.get('probability', 0):.3f}, "
+                    f"reason={host_decision.get('reason', 'unknown')})"
+                )
+            else:
+                logger.info("ForumEngine: System One不可用，沿用原主持人流程")
+
             logger.info("ForumEngine: 正在生成主持人发言...")
             
             # 调用主持人生成发言（传入最近5条）
